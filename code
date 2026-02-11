@@ -1,0 +1,120 @@
+///import { useState, useEffect, useCallback } from "react";
+import { ScanLine } from "lucide-react";
+import AllergyProfile from "@/components/AllergyProfile";
+import IngredientInput from "@/components/IngredientInput";
+import AnalysisResults, { type AnalysisResult } from "@/components/AnalysisResults";
+
+const STORAGE_KEY = "allerscan-allergies";
+
+function loadAllergies(): string[] {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function analyzeIngredients(
+  ingredientText: string,
+  allergies: string[]
+): AnalysisResult {
+  // Split ingredients by common delimiters
+  const raw = ingredientText
+    .split(/[,;\n]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const detectedSet = new Set<string>();
+  const ingredients = raw.map((name) => {
+    const lower = name.toLowerCase();
+    const matched = allergies.find((a) => lower.includes(a));
+    if (matched) detectedSet.add(matched);
+    return { name, flagged: !!matched, matchedAllergen: matched };
+  });
+
+  const detectedAllergens = Array.from(detectedSet);
+  return {
+    safe: detectedAllergens.length === 0,
+    detectedAllergens,
+    ingredients,
+  };
+}
+
+const Index = () => {
+  const [allergies, setAllergies] = useState<string[]>(loadAllergies);
+  const [ingredientText, setIngredientText] = useState("");
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(allergies));
+  }, [allergies]);
+
+  const addAllergy = useCallback((a: string) => {
+    setAllergies((prev) => [...prev, a]);
+    setResult(null);
+  }, []);
+
+  const removeAllergy = useCallback((a: string) => {
+    setAllergies((prev) => prev.filter((x) => x !== a));
+    setResult(null);
+  }, []);
+
+  const handleAnalyze = useCallback(() => {
+    setIsAnalyzing(true);
+    // Small delay for UX feel
+    setTimeout(() => {
+      setResult(analyzeIngredients(ingredientText, allergies));
+      setIsAnalyzing(false);
+    }, 400);
+  }, [ingredientText, allergies]);
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-10">
+        <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg gradient-accent">
+            <ScanLine className="h-5 w-5 text-accent-foreground" />
+          </div>
+          <div>
+            <h1 className="font-display text-xl font-bold text-foreground leading-tight">
+              AllerScan
+            </h1>
+            <p className="text-xs text-muted-foreground">
+              Instant allergy ingredient checker
+            </p>
+          </div>
+        </div>
+      </header>
+
+      {/* Main content */}
+      <main className="mx-auto max-w-5xl px-4 py-8">
+        <div className="grid gap-6 md:grid-cols-2">
+          <AllergyProfile
+            allergies={allergies}
+            onAdd={addAllergy}
+            onRemove={removeAllergy}
+          />
+          <IngredientInput
+            value={ingredientText}
+            onChange={setIngredientText}
+            onAnalyze={handleAnalyze}
+            isAnalyzing={isAnalyzing}
+            hasAllergies={allergies.length > 0}
+          />
+        </div>
+
+        {/* Results */}
+        {result && (
+          <div className="mt-8">
+            <AnalysisResults result={result} />
+          </div>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default Index;///
